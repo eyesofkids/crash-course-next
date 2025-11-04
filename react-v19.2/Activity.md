@@ -1464,3 +1464,10 @@ function ComponentWithSideEffects() {
 2. **[React Labs 文章](https://react.dev/blog/2025/04/23/react-labs-view-transitions-activity-and-more)** - Activity 功能的設計理念和應用場景
 
 **注意**：本文檔中的「暫停狀態」是為了幫助理解而使用的類比概念，實際開發中應以官方文件中的術語為準。
+
+
+---
+
+Ｎote
+
+because it use 'display:none', it also can keep the DOM state. + React State
