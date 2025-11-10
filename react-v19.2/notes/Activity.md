@@ -1471,3 +1471,227 @@ function ComponentWithSideEffects() {
 Ｎote
 
 because it use 'display:none', it also can keep the DOM state. + React State
+
+
+# Activity 在 Server Components 中的使用
+
+## 核心問題
+
+Activity 需要 `mode` prop 來控制 `visible`/`hidden`，而動態改變 `mode` 需要狀態管理。但 Server Components 不能使用 `useState`，那麼如何在 Server Components 中使用 Activity？
+
+## 解決方案
+
+### 1. 混合模式：Server Component + Client Component
+
+**模式**：Server Component 負責數據獲取和初始渲染，Client Component 負責交互狀態管理。
+
+```jsx
+// app/tabs/page.js (Server Component)
+import { Activity } from 'react';
+import TabsClient from './tabs-client';
+
+// Server Component 可以獲取數據
+async function TabsPage() {
+  const data = await fetchData();
+  
+  return (
+    <TabsClient initialData={data} />
+  );
+}
+
+// app/tabs/tabs-client.jsx (Client Component)
+'use client';
+
+import { Activity } from 'react';
+import { useState } from 'react';
+
+export default function TabsClient({ initialData }) {
+  const [activeTab, setActiveTab] = useState('tab1');
+
+  return (
+    <div>
+      <nav>
+        <button onClick={() => setActiveTab('tab1')}>標籤 1</button>
+        <button onClick={() => setActiveTab('tab2')}>標籤 2</button>
+      </nav>
+      
+      {/* Activity 在 Client Component 中使用 */}
+      <Activity mode={activeTab === 'tab1' ? "visible" : "hidden"}>
+        <Tab1Content data={initialData.tab1} />
+      </Activity>
+      
+      <Activity mode={activeTab === 'tab2' ? "visible" : "hidden"}>
+        <Tab2Content data={initialData.tab2} />
+      </Activity>
+    </div>
+  );
+}
+```
+
+### 2. 使用 URL 狀態（SearchParams）
+
+**模式**：使用 Next.js 的 `searchParams` 來控制 Activity 的 mode，適合需要可分享 URL 狀態的場景。
+
+```jsx
+// app/dashboard/page.js (Server Component)
+import { Activity } from 'react';
+import { Suspense } from 'react';
+
+export default function DashboardPage({ searchParams }) {
+  // 從 URL 參數獲取初始狀態
+  const activeTab = searchParams?.tab || 'overview';
+  
+  return (
+    <div>
+      {/* Activity 可以在 Server Component 中使用，mode 來自 props */}
+      <Activity mode={activeTab === 'overview' ? "visible" : "hidden"}>
+        <Suspense fallback={<Loading />}>
+          <OverviewTab />
+        </Suspense>
+      </Activity>
+      
+      <Activity mode={activeTab === 'analytics' ? "visible" : "hidden"}>
+        <Suspense fallback={<Loading />}>
+          <AnalyticsTab />
+        </Suspense>
+      </Activity>
+    </div>
+  );
+}
+
+// app/dashboard/tab-switcher.jsx (Client Component)
+'use client';
+
+import { useRouter, useSearchParams } from 'next/navigation';
+
+export default function TabSwitcher() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  const switchTab = (tab) => {
+    const params = new URLSearchParams(searchParams);
+    params.set('tab', tab);
+    router.push(`?${params.toString()}`);
+  };
+  
+  return (
+    <nav>
+      <button onClick={() => switchTab('overview')}>概覽</button>
+      <button onClick={() => switchTab('analytics')}>分析</button>
+    </nav>
+  );
+}
+```
+
+### 3. 靜態模式（SSR 預渲染）
+
+**模式**：在 Server Component 中使用 Activity 進行 SSR 預渲染，所有內容都預先渲染但部分隱藏。
+
+```jsx
+// app/products/page.js (Server Component)
+import { Activity } from 'react';
+import { Suspense } from 'react';
+
+export default async function ProductsPage() {
+  // Server Component 可以預渲染所有標籤內容
+  return (
+    <div>
+      {/* 預渲染所有標籤，但初始只顯示第一個 */}
+      <Activity mode="visible">
+        <Suspense fallback={<ProductSkeleton />}>
+          <FeaturedProducts />
+        </Suspense>
+      </Activity>
+      
+      {/* 預渲染但隱藏，切換時立即可見 */}
+      <Activity mode="hidden">
+        <Suspense fallback={<ProductSkeleton />}>
+          <AllProducts />
+        </Suspense>
+      </Activity>
+    </div>
+  );
+}
+```
+
+## 關鍵要點
+
+### ✅ Activity 可以在 Server Component 中使用
+
+- Activity 本身是函數組件，可以在 Server Component 中使用
+- `mode` prop 可以來自：
+  - URL 參數（searchParams）
+  - Server Component 的 props
+  - 靜態值（用於 SSR 預渲染）
+
+### ⚠️ 動態狀態管理需要 Client Component
+
+- 如果需要在用戶交互時改變 `mode`，必須在 Client Component 中管理狀態
+- 常見模式：Server Component 包裹 Client Component，Client Component 管理交互狀態
+
+### 📝 使用場景對比
+
+| 場景 | 方案 | 說明 |
+|------|------|------|
+| **用戶交互切換** | Client Component + useState | 按鈕點擊、標籤切換等 |
+| **URL 狀態控制** | Server Component + searchParams | 可分享的 URL 狀態 |
+| **SSR 預渲染** | Server Component + 靜態 mode | SEO 優化，預渲染內容 |
+| **混合場景** | Server Component + Client Component | 數據獲取在 Server，交互在 Client |
+
+## 實際範例：Next.js App Router
+
+```jsx
+// app/sidebar/page.js (Server Component)
+import { Activity } from 'react';
+import SidebarToggle from './sidebar-toggle';
+import SidebarContent from './sidebar-content';
+
+export default function SidebarPage({ searchParams }) {
+  const isOpen = searchParams?.sidebar === 'open';
+  
+  return (
+    <div>
+      <SidebarToggle />
+      
+      {/* Activity 在 Server Component 中，mode 來自 URL */}
+      <Activity mode={isOpen ? "visible" : "hidden"}>
+        <SidebarContent />
+      </Activity>
+    </div>
+  );
+}
+
+// app/sidebar/sidebar-toggle.jsx (Client Component)
+'use client';
+
+import { useRouter, useSearchParams } from 'next/navigation';
+
+export default function SidebarToggle() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const isOpen = searchParams?.sidebar === 'open';
+  
+  const toggle = () => {
+    const params = new URLSearchParams(searchParams);
+    if (isOpen) {
+      params.delete('sidebar');
+    } else {
+      params.set('sidebar', 'open');
+    }
+    router.push(`?${params.toString()}`);
+  };
+  
+  return (
+    <button onClick={toggle}>
+      {isOpen ? '關閉' : '打開'} 側邊欄
+    </button>
+  );
+}
+```
+
+## 總結
+
+**Activity 可以在 Server Component 中使用**，但：
+- ✅ `mode` 可以來自 props、URL 參數或靜態值
+- ⚠️ 動態改變 `mode` 需要 Client Component 管理狀態
+- 💡 最佳實踐：Server Component 負責數據，Client Component 負責交互
