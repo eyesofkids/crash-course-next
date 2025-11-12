@@ -75,7 +75,7 @@ export interface ActivityProps {
 
 ---
 
-![h:480 center](imgs/activity-clock.jpg)
+![h:560 center](imgs/activity-clock.jpg)
 
 
 ---
