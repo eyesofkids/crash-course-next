@@ -75,6 +75,12 @@ export interface ActivityProps {
 
 ---
 
+![h:480 center](imgs/activity-clock.jpg)
+
+
+---
+
+
 # vs 條件式渲染
 
 | 特性 | 條件渲染 (`&&` 或 `?:`) | `<Activity>` |
