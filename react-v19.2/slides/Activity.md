@@ -93,7 +93,7 @@ export interface ActivityProps {
 
 ---
 
-# vs CSS `display: none`
+# vs CSS 樣式隱藏/呈現
 
 | 特性 | CSS `display: none` | `<Activity>` |
 |------|---------------------|--------------|
