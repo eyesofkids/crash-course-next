@@ -67,15 +67,15 @@ export interface ActivityProps {
 
 # 為什麼要使用 Activity (Why)
 
-1. 主要針對於"條件渲染(Conditional Rendering)"樣式在某些應用場景下的缺點進行改善，尤其是(1)需要在呈現和隱藏間的反覆切換UI (2)除了React元件狀態外，也有DOM狀態需要保留的情況(例如: 捲軸位置、表單輸入或`<video>`,`<audio>`,`<iframe>`等)
-2. 提供類似"休眠(Sleep)"或"暫停(Pause)"意義的狀態，可以讓元件在隱藏時保留狀態，在顯示時快速還原，而不需要重新掛載元件<sup>註1</sup>
-3. 客戶端和伺服器間的交互應用，可以預先載入資料或渲染UI，並在客戶端元件中進行顯示或隱藏
+1. 主要針對於"條件渲染(Conditional Rendering)"樣式在某些場景下的缺點進行改善，尤其是(1)需要在呈現/隱藏間的反覆切換UI (2)除了React元件狀態外，也有DOM狀態需要保留的情況(例如: 捲軸位置、表單輸入或`<video>`,`<audio>`,`<iframe>`等)
+2. 提供類似"休眠(Sleep)"或"暫停(Pause)"意義上狀態，可讓元件在隱藏時保留狀態，在呈現時快速還原，而不需要重新掛載元件<sup>註1</sup>
+3. 在客戶端和伺服器間的交互應用，可以預先載入資料或渲染UI，並在客戶端元件中進行顯示或隱藏
 
 > 註1: 在概念上"隱藏(hidden)"仍然是"卸載(unmounted)"，狀態會由React內部保持，不會遺失與重新渲染，加上使用CSS的"display: none"來作呈現上的隱藏，而不會真正從DOM中移除，因此也可以保留DOM狀態
 
 ---
 
-![h:560 center](imgs/activity-clock.jpg)
+![h:580 center](imgs/activity-clock.png)
 
 
 ---
