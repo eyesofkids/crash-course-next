@@ -691,6 +691,13 @@ function Component() {
 
 有時候，你需要在響應式邏輯（如 `useEffect`）中使用非響應式邏輯，但這個非響應式邏輯需要讀取響應式值。
 
+**關鍵理解：**
+- `useEffect` 是響應式邏輯：會響應 reactive value 改變而重新執行
+- `useEffect` 本身不會"回來造成渲染"（它是副作用，不會直接導致渲染）
+- 但 `useEffect` 內部的某些邏輯（如事件回調、定時器回調）是 **non-reactive logic**
+- 這些 non-reactive logic 需要讀取 reactive value，但不想觸發 `useEffect` 重新執行
+- **這就是 `useEffectEvent` 的用途**：讓 non-reactive logic 能讀取最新的 reactive value，同時不會觸發 `useEffect` 重新執行
+
 ```jsx
 function ChatRoom({ roomId, theme }) {
   useEffect(() => {
@@ -759,7 +766,7 @@ function ChatRoom({ roomId, theme }) {
 
 ### 6. 實際判斷流程
 
-#### 判斷一個值是否是 Reactive Value
+#### 判斷一個值是否是 Reactive Value（響應式值）
 
 ```
 1. 這個值是在元件內部定義的嗎？
@@ -1595,11 +1602,220 @@ function App({ userId, api }) {
 
 ---
 
+### 實際案例：購物車與 localStorage 同步
+
+一個常見的實際案例是購物車與 localStorage 的同步。
+
+**需求：**
+1. 第一次渲染時，從 localStorage 讀取購物車數據
+2. 之後每次購物車內容改變時，都要同步寫入 localStorage
+3. 寫入時需要包含最新的 `userId`（用於區分不同用戶的購物車），但 `userId` 改變時不應該重新讀取 localStorage
+
+#### 傳統 useEffect 的問題
+
+```jsx
+function ShoppingCart({ userId }) {
+  const [cartItems, setCartItems] = useState([]);
+
+  // 第一次渲染時讀取 localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem(`cart_${userId}`);
+    if (saved) {
+      setCartItems(JSON.parse(saved));
+    }
+  }, [userId]); // 問題：userId 改變時也會重新讀取
+
+  // 購物車改變時寫入 localStorage
+  useEffect(() => {
+    // 這裡需要最新的 userId 和 cartItems
+    // 但我們只想在 cartItems 改變時寫入
+    localStorage.setItem(`cart_${userId}`, JSON.stringify(cartItems));
+  }, [userId, cartItems]); // 問題：userId 改變時也會寫入（可能覆蓋錯誤的用戶數據）
+}
+```
+
+**問題分析：**
+- `userId` 改變時，會重新讀取 localStorage（這可能是我們想要的，因為不同用戶的購物車不同）
+- 但如果 `userId` 改變時也寫入，可能會在讀取新用戶數據之前就覆蓋了舊用戶的數據
+- 更理想的場景：只在 `cartItems` 改變時寫入，但寫入時需要使用最新的 `userId`
+
+#### 使用 useEffectEvent 的解決方案
+
+```jsx
+import { useEffect, useEffectEvent, useState } from 'react';
+
+function ShoppingCart({ userId }) {
+  // ✅ 使用 lazy initialization 從 localStorage 讀取初始值
+  // 這樣可以避免在 useEffect 中同步調用 setState（會觸發 cascading renders 警告）
+  const [cartItems, setCartItems] = useState(() => {
+    const saved = localStorage.getItem(`cart_${userId}`);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (error) {
+        console.error('Failed to parse cart data:', error);
+        return [];
+      }
+    }
+    return [];
+  });
+
+  // ✅ 當 userId 改變時，重新從 localStorage 讀取
+  useEffect(() => {
+    const saved = localStorage.getItem(`cart_${userId}`);
+    if (saved) {
+      try {
+        setCartItems(JSON.parse(saved));
+      } catch (error) {
+        console.error('Failed to parse cart data:', error);
+        setCartItems([]);
+      }
+    } else {
+      setCartItems([]);
+    }
+  }, [userId]); // ✅ userId 改變時重新讀取（這是合理的）
+
+  // ✅ 使用 useEffectEvent 定義非響應式邏輯
+  // 這個函式可以讀取最新的 userId 和 cartItems
+  // 但這些值不會導致 saveToLocalStorage 函式本身「過時」
+  const saveToLocalStorage = useEffectEvent(() => {
+    // 始終讀取最新的 userId 和 cartItems
+    localStorage.setItem(`cart_${userId}`, JSON.stringify(cartItems));
+  });
+
+  // ✅ 響應式邏輯：只在 cartItems 改變時寫入
+  useEffect(() => {
+    // 只在購物車內容改變時寫入 localStorage
+    // 寫入時會使用最新的 userId（即使 userId 改變也不會觸發這個 Effect）
+    saveToLocalStorage();
+  }, [cartItems]); // ✅ 只依賴 cartItems
+
+  // 購物車操作
+  const addItem = (item) => {
+    setCartItems(prev => [...prev, item]);
+    // 不需要手動調用 saveToLocalStorage，Effect 會自動處理
+  };
+
+  const removeItem = (itemId) => {
+    setCartItems(prev => prev.filter(item => item.id !== itemId));
+    // 不需要手動調用 saveToLocalStorage，Effect 會自動處理
+  };
+
+  return (
+    <div>
+      {/* 購物車 UI */}
+    </div>
+  );
+}
+```
+
+**關鍵優勢：**
+- `saveToLocalStorage` 函式始終能存取最新的 `userId` 和 `cartItems`
+- Effect 只在 `cartItems` 改變時執行，不會因為 `userId` 改變而觸發
+- 即使 `userId` 在購物車操作過程中更新，寫入時仍會使用最新的 `userId`
+- 程式碼更清晰，邏輯分離更明確
+
+**更進階的場景：**
+
+如果需要在寫入時包含更多信息（如時間戳、版本號等），但這些值改變時不應該觸發重新讀取：
+
+```jsx
+function ShoppingCart({ userId }) {
+  // ✅ 使用 lazy initialization 從 localStorage 讀取初始值
+  // 這樣可以避免在初始渲染時在 useEffect 中同步調用 setState
+  const [cartItems, setCartItems] = useState(() => {
+    const saved = localStorage.getItem(`cart_${userId}`);
+    if (saved) {
+      try {
+        const data = JSON.parse(saved);
+        return data.items || [];
+      } catch (error) {
+        console.error('Failed to parse cart data:', error);
+        return [];
+      }
+    }
+    return [];
+  });
+  
+  const [version, setVersion] = useState(() => {
+    const saved = localStorage.getItem(`cart_${userId}`);
+    if (saved) {
+      try {
+        const data = JSON.parse(saved);
+        return data.version || 1;
+      } catch {
+        return 1;
+      }
+    }
+    return 1;
+  });
+  
+  const [lastModified, setLastModified] = useState(() => {
+    const saved = localStorage.getItem(`cart_${userId}`);
+    if (saved) {
+      try {
+        const data = JSON.parse(saved);
+        return data.lastModified || null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  // ✅ 當 userId 改變時，重新從 localStorage 讀取
+  // 注意：這是在響應外部變化（userId），是合理的場景
+  // 雖然會在 useEffect 中調用 setState，但這是響應外部系統變化的必要操作
+  useEffect(() => {
+    const saved = localStorage.getItem(`cart_${userId}`);
+    if (saved) {
+      try {
+        const data = JSON.parse(saved);
+        setCartItems(data.items || []);
+        setVersion(data.version || 1);
+        setLastModified(data.lastModified || null);
+      } catch (error) {
+        console.error('Failed to parse cart data:', error);
+        setCartItems([]);
+        setVersion(1);
+        setLastModified(null);
+      }
+    } else {
+      setCartItems([]);
+      setVersion(1);
+      setLastModified(null);
+    }
+  }, [userId]);
+
+  // ✅ 非響應式邏輯：寫入時需要最新的所有值
+  const saveToLocalStorage = useEffectEvent(() => {
+    const data = {
+      items: cartItems,
+      version: version,
+      lastModified: new Date().toISOString(),
+      userId: userId // 始終讀取最新的 userId
+    };
+    localStorage.setItem(`cart_${userId}`, JSON.stringify(data));
+    setLastModified(data.lastModified);
+  });
+
+  // ✅ 響應式邏輯：只在 cartItems 改變時寫入
+  useEffect(() => {
+    saveToLocalStorage();
+  }, [cartItems]); // 只依賴 cartItems，不依賴 version 或 userId
+
+  // ...
+}
+```
+
+---
+
 ### 其他常見用例
 
 1. **訂閱/取消訂閱事件**：在 `useEffect` 內設定事件監聽器時，監聽器內的回呼函式可以使用 `useEffectEvent` 來讀取最新的 state，而無需重新訂閱
 2. **計時器 (Timers)**：在 `setInterval` 或 `setTimeout` 的回呼中使用最新的 state，而不需要清除並重新設定計時器
 3. **API 輪詢**：執行 API 請求時需要最新的過濾條件或其他參數，但又不想在這些參數變動時重新啟動 Effect
+4. **localStorage 同步**：在購物車、表單草稿等場景中，需要將數據同步到 localStorage，但同步時需要讀取最新的用戶 ID 或其他元數據，而這些值改變時不應該觸發重新讀取
 
 您可以查閱 React 官方文件以獲得更多資訊和範例。
 
