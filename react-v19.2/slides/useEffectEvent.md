@@ -40,28 +40,37 @@ footer: '
 
 - [`useEffectEvent`](https://react.dev/reference/react/useEffectEvent): 一個React勾子，可以讓你從Effects中提取非響應式邏輯(non-reactive logic)，到一個稱為Effect Event的可重覆使用的函式中
 
-> 註: 它並非一個全新的東西，最初在官方Github中 [issue#14099](https://github.com/facebook/react/issues/14099) 有針對這種實作上的問題討論(2018)，社群中也有實現類似作用的客製化勾子(例如useEventCallback)，最初RFC訂名為[useEvent](https://github.com/reactjs/rfcs/pull/220)，在v18時的Canary發佈頻道已加入實驗性的實作(2022)
+> 註: 最初在官方Github中 [issue#14099](https://github.com/facebook/react/issues/14099) 有針對這種實作上的問題討論(2018)，社群中也有實現類似作用的客製化勾子(例如useEventCallback)，最初RFC訂名為[useEvent](https://github.com/reactjs/rfcs/pull/220)，在v18時的Canary發佈頻道已加入實驗性的實作(2022)
 
 ---
 
+# 類型定義
+
 ```ts
-// @enableActivity
-export interface ActivityProps {
-    /**
-      * @default "visible"
-      */
-    mode?:
-        | "hidden"
-        | "visible"
-        | undefined;
-    /**
-      * A name for this Activity boundary for instrumentation purposes.
-      * The name will help identify this boundary in React DevTools.
-      */
-    name?: string | undefined;
-    children: ReactNode;
+export type Dispatcher = {
+    useEffectEvent?: <Args, F: (...Array<Args>) => mixed>(callback: F) => F,
 }
 ```
+
+**泛型參數** `Args` 是函數參數類型，`F` 是 `(...Array<Args>) => mixed` 的函式類型
+**函式簽名** 接受一個類型為 `F` 的 `callback`，回傳一個相同類型 `F` 的函式
+**`mixed` 類型** Flow 類型系統中所有類型的超類型(supertype)，相當於 TypeScript 的 `unknown`。允許回呼函式返回任何類型的值，提供最大靈活性
+
+---
+
+# 語法
+
+```ts
+useEffectEvent(callback)
+```
+
+**參數 callback**
+
+一個包含你的Effect Event邏輯的函式。當你用useEffectEvent定義一個Effect Event時，callback在被呼叫時，總是能從props與state存取到最新的值。這可以協助避免過期閉包(stale closures)的問題。
+
+**回傳值**
+
+回傳一個Effect Event函式。可在(也只能)`useEffect`, `useLayoutEffect` 或 `useInsertionEffect`呼叫
 
 ---
 

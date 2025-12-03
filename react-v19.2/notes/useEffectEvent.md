@@ -4,6 +4,8 @@
 
 - [Separating Events from Effects](https://react.dev/learn/separating-events-from-effects#extracting-non-reactive-logic-out-of-effects)
 - [useEffectEvent API Reference](https://react.dev/reference/react/useEffectEvent)
+- [Flow 類型系統 - mixed 類型](https://flow.org/en/docs/types/mixed/) - Flow 官方文檔中關於 `mixed` 頂層類型的說明
+- [Flow 類型系統文檔](https://flow.org/en/docs/types/) - Flow 類型系統完整文檔
 
 ---
 
@@ -1389,7 +1391,22 @@ useEffectEvent?: <Args, F: (...Array<Args>) => mixed>(callback: F) => F;
 **說明：**
 - **泛型參數**：`Args` 代表函數參數的型別，`F` 代表函數型別本身
 - **函式簽名**：接受一個回呼函式 `callback`，並回傳相同型別的函式
+- **`mixed` 類型**：這是 Flow 類型系統中的頂層類型（top type），表示「任何值」（類似於 TypeScript 的 `unknown`）。在這裡表示回呼函式可以返回任何類型的值，不是指「混合的返回值」，而是表示返回值類型可以是任意的。`mixed` 是類型安全的，使用前需要進行類型檢查，與 `any`（會關閉類型檢查）不同。詳細說明可參考 [Flow 官方文檔](https://flow.org/en/docs/types/mixed/)
 - **可選性**：`?` 表示這個 API 可能是實驗性的或不穩定的
+
+> **為什麼 React 同時使用 Flow 和 TypeScript？**
+> 
+> React 官方在**內部開發**時主要使用 **Flow**（由 Facebook/Meta 開發），因為：
+> 1. **歷史原因**：React 在 2013 年發布時，Flow 是 Facebook 內部使用的類型檢查工具，與 React 同時開發
+> 2. **漸進式採用**：Flow 允許在現有 JavaScript 代碼中逐步添加類型註解，不需要大規模重構
+> 3. **內部一致性**：Facebook/Meta 內部多個專案都使用 Flow，保持工具鏈統一
+> 
+> 但 React 同時也提供 **TypeScript 類型定義**（`@types/react`），因為：
+> 1. **社群需求**：TypeScript 在開發者社群中更受歡迎，使用率更高
+> 2. **生態系統**：許多 React 專案和工具鏈都基於 TypeScript
+> 3. **開發體驗**：為使用 TypeScript 的開發者提供完整的類型支援和 IDE 智能提示
+> 
+> 因此，React **源碼內部使用 Flow**，但**對外提供 TypeScript 類型定義**，這樣既保持了內部開發的一致性，也滿足了廣大使用 TypeScript 的開發者需求。
 
 ---
 
