@@ -161,6 +161,34 @@ function ChatRoom({ roomId, theme }) {
 
 This solves the problem. Note that you had to remove theme from the list of your Effect's dependencies, because it's no longer used in the Effect. You also don't need to add onConnected to it, because Effect Events are not reactive and must be omitted from dependencies.
 
+
+
+---
+
+
+The experimental useEffectEvent is generally something useCallback should have been without depedency array or with empty dependency array to match the behavior of useEffect. Introducing new name will just bring more confusion since it's very hard to image, what useEffectEvent should do...
+
+I see perhaps useChildCallback or useCallbackChild would be a better fit?
+
+useCallback Use Case: It is used to prevent unnecessary re-renders of child components by memoizing a function instance and changing the callback only when one of its dependencies changes .
+useEffectEvent Use Case: It provides a more powerful alternative to useCallback with no dependencies, allowing for constant reference to a function and preventing unnecessary re-renders of child components
+
+---
+
+gaearon
+opened on Nov 5, 2018 · edited by gaearon
+Collaborator
+This is related to #14092, #14066, reactjs/rfcs#83, and some other issues.
+
+The problem is that we often want to avoid invalidating a callback (e.g. to preserve shallow equality below or to avoid re-subscriptions in the effects). But if it depends on props or state, it's likely it'll invalidate too often. See #14092 (comment) for current workarounds.
+
+useReducer doesn't suffer from this because the reducer is evaluated directly in the render phase. @sebmarkbage had an idea about giving useCallback similar semantics but it'll likely require complex implementation work. Seems like we'd have to do something like this though.
+
+I'm filing this just to acknowledge the issue exists, and to track further work on this.
+
+---
+
+
 ---
 
 ## 為什麼這些概念很重要？
