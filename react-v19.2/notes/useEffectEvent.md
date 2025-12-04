@@ -173,6 +173,7 @@ The experimental useEffectEvent is generally something useCallback should have b
 I see perhaps useChildCallback or useCallbackChild would be a better fit?
 
 useCallback Use Case: It is used to prevent unnecessary re-renders of child components by memoizing a function instance and changing the callback only when one of its dependencies changes .
+
 useEffectEvent Use Case: It provides a more powerful alternative to useCallback with no dependencies, allowing for constant reference to a function and preventing unnecessary re-renders of child components
 
 ---
@@ -2303,9 +2304,15 @@ Effect Events are non-reactive “pieces” of your Effect code. They should be 
 Recap
 
 Event handlers run in response to specific interactions.
+
 Effects run whenever synchronization is needed.
+
 Logic inside event handlers is not reactive.
+
 Logic inside Effects is reactive.
+
 You can move non-reactive logic from Effects into Effect Events.
+
 Only call Effect Events from inside Effects.
+
 Don’t pass Effect Events to other components or Hooks.
