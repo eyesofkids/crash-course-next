@@ -2044,3 +2044,268 @@ useEffect(() => {
 
 `useEffectEvent` 的設計目的正是將這三部分（建立 ref、同步 effect、穩定回呼）合併為一個單一、更簡潔的 API。
 
+---
+
+## 記錄
+
+我查看了 useReducer 的源代碼，但我不太明白它與 useCallback 有什麼關係。
+
+useCallback它允許你快取回調函數，避免每次都傳遞不同的函數。但你必須在第二個陣列參數中指定它所依賴的所有內容。如果依賴項來自 props 或 state，你的回呼函數可能會頻繁失效。
+
+useReducer它不會遇到這個問題。dispatch即使 reducer 本身關閉了 props 和 state，它傳回的函數在重新渲染之間也會保持不變。這是因為 reducer 會在下一次渲染期間運行（因此它自然能夠讀取 props 和 state）。如果useCallback也能做到這一點就更好了，但目前還不清楚該怎麼做。
+
+「渲染過程中引用發生變化」有哪些問題？能否簡單解釋一下？
+
+在並發模式下（尚未發布），它會「記住」上次渲染的版本，如果我們渲染的工作優先順序不同，這就不太理想了。因此，它並非「非同步安全性」。
+
+
+---
+
+Hook 的內部useEvent運作原理大致如下：
+
+```js
+// (!) Approximate behavior
+
+function useEvent(handler) {
+  const handlerRef = useRef(null);
+
+  // In a real implementation, this would run before layout effects
+  useLayoutEffect(() => {
+    handlerRef.current = handler;
+  });
+
+  return useCallback((...args) => {
+    // In a real implementation, this would throw if called during render
+    const fn = handlerRef.current;
+    return fn(...args);
+  }, []);
+}
+```
+換句話說，它提供了一個穩定的函數，該函數會呼叫你傳遞的函數的最新版本。
+
+內建函數useEvent與上述用戶空間實作有一些不同之處。
+
+如果在渲染期間呼叫被包裹的事件處理程序，useEvent將會拋出異常。 （從效果器或其他任何時間調用它都沒問題。）因此，強制規定在渲染期間這些函數被視為不透明函數，並且永遠不會被調用。這樣即使內部的 props/state 發生變化，也能安全地保持它們的身份。由於它們在渲染期間無法被調用，因此它們不會影響渲染輸出——因此當它們的輸入發生變化時，它們不需要改變（即它們不是「響應式」的）。
+
+在所有佈局效果運行之前，會切換處理程序的「目前」版本。這避免了使用者空間版本中存在的一個陷阱：一個元件的效果可能會觀察到另一個元件狀態的先前版本。不過，切換的確切時機仍是一個懸而未決的問題（與其他未決問題一起列在文末）。
+
+作為最佳化措施，在伺服器端渲染時，useEvent所有呼叫都會傳回相同的拋出異常的 shim。這是安全的，因為事件在伺服器端不存在。這項最佳化允許為 SSR 打包程式碼的框架從 SSR 套件中移除事件處理程序（及其相依性），從而可能提高 SSR 效能。 （請注意，這意味著類似這樣的比較fn1 === fn2將無法可靠地區分兩個不同的事件處理程序。）
+
+In other words, it gives you a stable function that calls the latest version of the function you passed.
+
+The built-in useEvent would have a few differences from the userland implementation above.
+
+Event handlers wrapped in useEvent will throw if called during render. (Calling it from an effect or at any other time is fine.) So it is enforced that during rendering these functions are treated as opaque and never called. This makes it safe to preserve their identity despite the changing props/state inside. Because they can't be called during rendering, they can't affect the rendering output — and so they don't need to change when their inputs change (i.e. they're not "reactive").
+
+The "current" version of the handler is switched before all the layout effects run. This avoids the pitfall present in the userland versions where one component's effect can observe the previous version of another component's state. The exact timing of the switch is an open question though (listed with other open questions at the bottom).
+
+As an optimization, when server rendering, useEvent will return the same throwing shim for all calls. This is safe because events don't exist on the server. This optimization allows frameworks that bundle code for SSR to strip out event handlers (and their dependencies) from the SSR bundles, potentially improving SSR performance. (Note that this means that comparisons like fn1 === fn2 would not allow to reliably distinguish two different event handlers.)
+
+
+---
+
+另一種方法是：
+
+```js
+function useEventCallback(fn) {
+  let ref = useRef();
+  useLayoutEffect(() => {
+    ref.current = fn;
+  });
+  return useCallback(() => (0, ref.current)(), []);
+}
+```
+這不像你的程式碼需要參數。但是，你不能在渲染階段呼叫它，而且在並發環境中使用 mutation 也存在風險。
+
+---
+
+```ts
+// Better useCallback() which always returns the same (wrapped) function reference and does not require deps array.
+// Use this when the callback requires to be same ref across rendering (for performance) but parent could pass a callback without useCallback().
+// useEventCallback(): https://github.com/facebook/react/issues/14099#issuecomment-499781277
+// WARNING: Returned callback should not be called from useLayoutEffect(). https://github.com/facebook/react/issues/14099#issuecomment-569044797
+export function useStableCallback<T extends (...args: any[]) => any>(fn: T): T {
+  const ref = useRef<T>()
+  useImperativeHandle(ref, () => fn) // Assign fn to ref.current (currentFunc) in async-safe way
+
+  return useRef(((...args: any[]) => {
+    const currentFunc = ref.current
+    if (!currentFunc) {
+      throw new Error('Callback retrieved from useStableCallback() cannot be called from useLayoutEffect().')
+    }
+    return currentFunc(...args)
+  }) as T).current
+}
+```
+
+---
+
+令人匪夷所思的是，七年過去了，我們離找到解決方案仍然遙遙無期，而我們看到的卻是大量的改進，但許多生產環境中的應用甚至都不願採用。我們曾經擁有可變this.props類組件，如今卻找不到萬無一失的替代方案。似乎總有一些隱患阻止我們在某些​​情況下使用某個函數，理由是這樣做是為了保護開發者免受更嚴重的錯誤。我並不否認這種做法確實useCallback可以避免這些錯誤，但有時，沒有替代模式就等於直接阻礙了開發。
+
+目前看來，我們能做到的最接近的方案，大致就是之前useEventCallback多次提到的，先克隆到一個引用（ref）中，然後在佈局效果（Layout Effect）中更新。這種方法在許多情況下都有效，但有人指出，由於佈局效果在子元素中優先運行，因此存在一個缺陷。如果在更深層的佈局效果中運行，更新後的內容就會失效。
+
+```js
+function useEventCallback(fn) {
+  const ref = useRef(fn);
+  useLayoutEffect(() => {
+    ref.current = fn;
+  });
+  return useCallback((...args) => ref.current(...args), []);
+}
+```
+
+此外，由於它並非 React 內建函數，您仍然需要在依賴數組中聲明結果，這會破壞 effect 的語義，因為它實際上只是一個可變引用，而不是響應式函數。它是否會觸發 effect 並不重要，因為將其聲明為依賴項等於告訴讀者，如果結果發生變化，內部函數就應該觸發，這通常不是您想要的結果。 （進展緩慢的）此功能useEffectEvent旨在解決這個問題，但目前還不清楚它是否可以用於同步事件發射useLayoutEffect。
+
+在這些討論貼文中，我很少看到有人提及瀏覽器的原生工作方式。在建立 React 元件時，我幾乎總是會參考瀏覽器的行為。無論是像 `require` isHidden、notVisible`require` 或 ` hiddenrequire` 這樣簡單的 props 命名，還是考慮事件的結構和觸發時機，瀏覽器通常都會提供類似的解決方案。
+
+例如，我們來考慮瀏覽器事件，例如focusout點擊輸入框以外的區域。很明顯，點擊輸入框時，這個事件會同步觸發。但是，如果某個屬性disabled變成 true 呢？這也會觸發一個同步focusout事件。在 React 中，我們可以將這種操作關聯起來，視為子元件中某個屬性的改變觸發了另一個事件（這簡直是褻瀆！）。那麼，我們該如何在 React 中實現類似的功能呢？
+
+focusout有趣的是，React 在這種同步事件情況下的行為始終是過時的。如果 React 更改了disabled屬性，則呼叫的回呼函數仍然是上一次渲染的回呼函數，因為 React 無法在回呼函數被處理之前進行幹預並取代它。這裡有一個沙箱範例可以驗證這一點。此外，您也可以嘗試useInsertionEffect一下，問題仍然存在，因為 React 無法繞過disabledsetter 的同步觸發機制focusout。
+
+假設我們有一個複雜的狀態，例如 `state` const active = hovered || focused || x > 5，它x來自 props。在確定 `state` 的值之前active，我們無法知道在某些onActiveChange事件中應該發出什麼。如果 ` xstate` 沒有被考慮在內，或許我們可以在 `state`onMouseEnter/Leave和onFocus/Blur`state` 的處理程序中預先計算（並重複）最終派生狀態，然後再發出狀態。但是，考慮到 `state`x會像disabled輸入一樣發生變化，我們可能會遇到一個需要在 effect 中處理的潛在事件。為了像focusout輸入的同步事件那樣處理狀態更新，我們希望useLayoutEffect在這裡使用 `state` 來通知​​樹的其他部分狀態已更新。現在，我們又回到了先前提到的注意事項，不過，沙箱測試表明它並沒有偏離 React 的常規行為。
+
+此時可能會有人問：「為什麼不直接把狀態提升上去呢？」然後在設定狀態的地方執行回呼函數x。沒錯，「從 props 衍生狀態」不好……我知道，我知道。我已經聽膩了用這種方式解決 React 中太多問題。
+
+可能出現的問題包括：
+
+x遠高於我們的組件
+hover你真的想讓我把`and` 的價值也提升上去嗎focus？然後也要計算派生狀態來觸發事件。我應該把所有應用程式狀態都放在一個App.tsx檔案裡嗎？然後可能還要把這三個值都傳回我的元件？如果我的元件本身也是一個陣列呢？這簡直是封裝的惡夢。有時候，不受控制的組件反而更簡潔。
+
+x可能來自一個只提供useState樣式鉤子而不提供事件的 庫
+沒有事件發生，看來我們還是得繼續使用useLayoutEffect舊方法。
+
+如果它確實提供了與狀態相關的處理程序，那麼為了在回調中單獨控制狀態而重新計算狀態真的值得嗎？
+或許hovered無法focused被舉起
+
+它們可能來自類似 `failure`useHover和useFocus`failure` 這樣的鉤子函數，這些函數會傳回一個狀態。由於循環限制，解除這些鉤子函數可能無法實現。
+
+雖然我還要繼續繁瑣地複製上面的程式碼以避免依賴陣列出現程式碼檢查錯誤和語義衝突，但如果能有一個像回呼函數中類別元件那樣簡單的 API，將響應式值解包成穩定的類型，那就好多了。以前，反向操作也很簡單const { prop } = this.props;。當然，肯定有一些方法useStable(value)可以幫我們解決這個問題，並且更好地相容於程式碼檢查工具。
+
+---
+
+useEventEffect 現已發布，其功能與本貼文中多次提到的 useEventCallback 函數類似：https://react.dev/blog/2025/10/01/react-19-2#use-effect-event。使用 useEventEffect，您無需（也不應該）在依賴項數組中列出函數，但您不能將其傳遞給更深層的元件；相反，如果需要，更深層的元件應該包裝回調函數。
+
+對於渲染過程中呼叫的函數，`useEventEffect` 不適用，因為函數標識具有語意意義。對於這類函數，我們希望 `useCallback` 在依賴項更改時也更改其標識（否則，更深層的元件將無法知道何時需要重新呼叫該函數）。但如果您遇到效能問題，則可以使用效能分析器、`useMemo` 和/或 React 編譯器來解決大多數問題。
+
+鑑於團隊對 useEventEffect 的發布感到滿意，我將關閉此問題，並且我預計在可預見的未來不會再在這方面進行更多工作。
+
+---
+
+非常感謝發布新版本——很高興看到這方面取得進展！
+新版本useEffectEvent已經解決了原問題的一半左右——特別是關於穩定依賴項的部分useEffect（我們終於有了一個不需要放入 deps 數組中的函數）。
+
+然而，由於目前的局限性，問題的另一半仍然存在：
+
+“你不允許將其傳遞給更深層的組件。”
+
+這會引發一些問題：
+
+當一個函數既在子函數中使用useEffect 又傳遞給子函數時，我們必須保持一種useCallback方法，並透過建立一個副本useEffectEvent，這會增加不必要的樣板程式碼和額外的函數包裝層。
+由於useCallback結果會傳遞給子元件，因此當依賴項發生變化時，結果仍然會發生變化，從而導致記憶化子元件不必要的重新渲染/重新計算。
+例子
+```js
+// Some function that is imperative by its nature
+// (e.g., an event handler / setter / action).
+// I’d love to use `useEventCallback` here,
+// but I can’t - since it’s also passed to a child component.
+const doSomething = useCallback(() => {
+  // ...do something
+}, [someDep1, someDep2]);
+
+// ...and I still have to create a “duplicate”
+// to have a stable version for useEffect:
+const doSomethingStable = useEffectEvent(doSomething);
+useEffect(() => {
+  console.log(someDep); // do something with dependency
+  doSomethingStable(); // and call our function
+}, [someDep]);
+
+// But in the child prop, I’m still forced to use
+// the "unstable" version of this function,
+// which "breaks" memoization: 
+return <MemoizedChild onSomething={doSomething} />;
+```
+
+「不允許將其傳遞給更深層的組件」這項限制存在的具體原因是什麼？
+
+PS：哦，其實我一開始沒注意到，官方文件也建議不要在其他鉤子函數中使用它（useEffect 和 useLayoutEffect 除外）。
+這使得這個方案更不適用於這種情況——我們仍然沒有一個合適的、官方的方法來定義一個真正「穩定」的回調函數。
+
+---
+
+這是有意為之，因為通常情況下，你無法確定子元件是否關心函數的特定值。子元件可能需要在函數傳回不同值時重新呼叫函數，但如果在呼叫者中使用 `useEventCallback` 包裹函數，就無法做到這一點。我知道這很微妙，但確保每個元件都能獨立地判斷其正確性，是我們設計 React 功能時關注的核心部分。
+
+（上次忘了關，現在關！）
+
+---
+
+### Limitations of Effect Events 
+
+Effect Events are very limited in how you can use them:
+
+Only call them from inside Effects.
+Never pass them to other components or Hooks.
+
+For example, don’t declare and pass an Effect Event like this:
+
+```js
+function Timer() {
+  const [count, setCount] = useState(0);
+
+  const onTick = useEffectEvent(() => {
+    setCount(count + 1);
+  });
+
+  useTimer(onTick, 1000); // 🔴 Avoid: Passing Effect Events
+
+  return <h1>{count}</h1>
+}
+
+function useTimer(callback, delay) {
+  useEffect(() => {
+    const id = setInterval(() => {
+      callback();
+    }, delay);
+    return () => {
+      clearInterval(id);
+    };
+  }, [delay, callback]); // Need to specify "callback" in dependencies
+}
+Instead, always declare Effect Events directly next to the Effects that use them:
+
+function Timer() {
+  const [count, setCount] = useState(0);
+  useTimer(() => {
+    setCount(count + 1);
+  }, 1000);
+  return <h1>{count}</h1>
+}
+
+function useTimer(callback, delay) {
+  const onTick = useEffectEvent(() => {
+    callback();
+  });
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      onTick(); // ✅ Good: Only called locally inside an Effect
+    }, delay);
+    return () => {
+      clearInterval(id);
+    };
+  }, [delay]); // No need to specify "onTick" (an Effect Event) as a dependency
+}
+```
+
+Effect Events are non-reactive “pieces” of your Effect code. They should be next to the Effect using them.
+
+
+Recap
+
+Event handlers run in response to specific interactions.
+Effects run whenever synchronization is needed.
+Logic inside event handlers is not reactive.
+Logic inside Effects is reactive.
+You can move non-reactive logic from Effects into Effect Events.
+Only call Effect Events from inside Effects.
+Don’t pass Effect Events to other components or Hooks.

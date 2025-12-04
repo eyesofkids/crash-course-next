@@ -40,21 +40,19 @@ footer: '
 
 - [`useEffectEvent`](https://react.dev/reference/react/useEffectEvent): 一個React勾子，可以讓你從Effects中提取非響應式邏輯(non-reactive logic)，到一個稱為Effect Event的可重覆使用的函式中
 
-> 註: 最初在官方Github中 [issue#14099](https://github.com/facebook/react/issues/14099) 有針對這種實作上的問題討論(2018)，社群中也有實現類似作用的客製化勾子(例如useEventCallback)，最初RFC訂名為[useEvent](https://github.com/reactjs/rfcs/pull/220)，在v18時的Canary發佈頻道已加入實驗性的實作(2022)
+> 註: 最早(2018)在官方Github中 [issue#14099](https://github.com/facebook/react/issues/14099) 有針對`useCallback`在某些實作場景上的問題討論，社群中也有實現類似作用的自訂勾子(例如`useEventCallback`)，後來RFC訂名為[useEvent](https://github.com/reactjs/rfcs/pull/220)，在v18時的Canary頻道就已加入實驗性質實作(2022)
 
 ---
 
 # 類型定義
 
 ```ts
-export type Dispatcher = {
-    useEffectEvent?: <Args, F: (...Array<Args>) => mixed>(callback: F) => F,
-}
+useEffectEvent?: <Args, F: (...Array<Args>) => mixed>(callback: F) => F
 ```
 
 **泛型參數** `Args` 是函數參數類型，`F` 是 `(...Array<Args>) => mixed` 的函式類型
 **函式簽名** 接受一個類型為 `F` 的 `callback`，回傳一個相同類型 `F` 的函式
-**`mixed` 類型** Flow 類型系統中所有類型的超類型(supertype)，相當於 TypeScript 的 `unknown`。允許回呼函式返回任何類型的值，提供最大靈活性
+**`mixed` 類型** Flow 類型系統中所有類型的超類型(supertype)，相當於 TypeScript 的 `unknown`。允許回呼函式返回任何類型的值，提供靈活性(而不是`void`)
 
 ---
 
@@ -64,13 +62,29 @@ export type Dispatcher = {
 useEffectEvent(callback)
 ```
 
-**參數 callback** 一個包含你的Effect Event邏輯的函式。當你用useEffectEvent定義一個Effect Event時，callback在被呼叫時，總是能從props與state存取到最新的值。這能協助避免過期閉包(stale closures)的問題。
+**參數 callback** 一個包含Effect Event邏輯的函式。當你用useEffectEvent定義一個Effect Event時，callback在被呼叫時，總是能從props與state存取到最新的值。這能協助避免過期閉包(stale closures)的問題。
 
 **回傳值** 回傳一個Effect Event函式。可以(也只能)`useEffect`, `useLayoutEffect` 或 `useInsertionEffect`裡呼叫
 
 ---
 
+# 什麼是`Effect Event`(作用事件)
+
+`Effect Events`(作用事件)類似`事件處理函式`，主要區別在於`事件處理函式`是響應`使用者互動`而執行的，而`Effect 事件`則是由你從 `Effects`(作用)中觸發的。 `Effect 事件`可以讓你允許在 Effect 的響應性(reactivity)與不應該具有響應性的程式碼之間「打破鏈結」
+
+Effect Events are not reactive and must be omitted from dependencies.
+
+Reading latest props and state with Effect Events 
+
+
+
+---
+
 # 為什麼要使用 useEffectEvent (Why)
+
+1. 針對`useCallback`在特定使用場景下失效(或過於經常更新導致穩定性不佳)[issue#14099](https://github.com/facebook/react/issues/14099) 
+2. 有目的地針對目前`React Complier`的搭配上的最佳化(或未來能穩定大量採用後)
+3.  
 
 
 
