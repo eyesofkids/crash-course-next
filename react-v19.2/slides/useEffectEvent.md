@@ -38,9 +38,9 @@ footer: '
 
 # 什麼是 useEffectEvent (What)
 
-- [`useEffectEvent`](https://react.dev/reference/react/useEffectEvent): 一個React勾子，可以讓你從Effects中提取非響應式邏輯(non-reactive logic)，到一個稱為`Effect Event`的可重覆使用的函式中
+- [`useEffectEvent`](https://react.dev/reference/react/useEffectEvent): 一個React勾子，可以讓你從Effects中提取「非響應式邏輯(non-reactive logic)」，到一個被稱為`Effect Event`的可重覆使用的函式中
 
-> 註: 最早(2018)在官方Github中 [issue#14099](https://github.com/facebook/react/issues/14099) 有針對`useCallback`在某些實作場景上的問題討論，社群中也有實現類似作用的自訂勾子(例如`useEventCallback`)，後來RFC訂名為[useEvent](https://github.com/reactjs/rfcs/pull/220)，在v18時的Canary頻道就已加入實驗性質實作(2022)
+> 註: 最早(2018)在官方Github中 [issue#14099](https://github.com/facebook/react/issues/14099) 有針對`useCallback`在某些實作場景上的問題討論，社群中也有類似作用的自訂勾子(例如`useEventCallback`)，後來RFC訂名為[useEvent](https://github.com/reactjs/rfcs/pull/220)，在v18時的Canary頻道就已加入實驗性質實作(2022)
 
 ---
 
@@ -62,7 +62,7 @@ useEffectEvent?: <Args, F: (...Array<Args>) => mixed>(callback: F) => F
 useEffectEvent(callback)
 ```
 
-**參數 callback** 一個包含Effect Event邏輯的函式。當你用`useEffectEvent`定義一個Effect Event時，callback在被呼叫時，總是能從props與state存取到最新的值。這能協助避免過期閉包(stale closures)的問題。
+**參數 callback** 一個包含Effect Event邏輯的函式。當你用`useEffectEvent`定義一個Effect Event時，callback在被呼叫時，必定能從props與state存取到最新的值。這能協助避免「過期/陳舊閉包(stale closures)」的問題。
 
 **回傳值** 回傳一個Effect Event函式。可以(也只能)`useEffect`, `useLayoutEffect` 或 `useInsertionEffect`裡呼叫
 
@@ -88,18 +88,17 @@ Effects 中的邏輯，會"**自動**"執行或重新執行以進行同步化。
 - **事件處理函式**：響應`使用者互動`而執行（如點擊按鈕）
 - **Effect Event**：由你從 `Effects`(作用)中觸發
 
-`Effect Event`讓你能夠在 Effect 的響應性(reactivity)與不應該具有響應性的程式碼之間「打破鏈結」，將非響應式邏輯從響應式邏輯中分離出，以下為幾個重點：
+`Effect Event`讓你能夠在 Effect 的響應性(reactivity)中，與不應該具有響應性的程式碼之間「打破鏈結」，將非響應式邏輯從響應式邏輯中分離出，以下為幾個重點：
 1. 它**不是響應式的**，必須從依賴項中省略
-2. 它總是能讀取到**最新的props和state**，可避免過期閉包問題(穩定的函式引用)
+2. 它總是能存取到**最新的props和state**，可避免過期/陳舊閉包問題(穩定的函式引用)
 3. 它**只能**在 Effects 裡呼叫，**切勿**不要傳遞到其它元件或勾子
-
 
 ---
 
 # 為什麼要使用 useEffectEvent (Why)
 
-1. 針對`useCallback`在特定使用場景下會失效(過於經常更新，導致穩定性問題)[issue#14099](https://github.com/facebook/react/issues/14099) 
-2. 有目的性質地針對目前`React Complier`的搭配上的最佳化(或未來能穩定大量採用後)
+1. 針對`useCallback`在特定使用場景下的應用問題(過於經常更新，導致穩定性問題)[issue#14099](https://github.com/facebook/react/issues/14099) 
+2. 有目的地，針對目前`React Complier`的搭配上的最佳化(未來能穩定採用後)
 3. `eslint-plugin-react-hooks`在新版本中的`set-state-in-effect` [issues/34743](https://github.com/facebook/react/issues/34743)的解決樣式之一
 
 ---
