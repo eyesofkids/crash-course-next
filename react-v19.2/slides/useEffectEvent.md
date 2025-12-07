@@ -50,9 +50,9 @@ footer: '
 useEffectEvent?: <Args, F: (...Array<Args>) => mixed>(callback: F) => F
 ```
 
-**泛型參數** `Args` 是函數參數類型，`F` 是 `(...Array<Args>) => mixed` 的函式類型
-**函式簽名** 接受一個類型為 `F` 的 `callback`，回傳一個相同類型 `F` 的函式
-**`mixed` 類型** Flow 類型系統中所有類型的超類型(supertype)，相當於 TypeScript 的 `unknown`。允許回呼函式返回任何類型的值，提供靈活性(而不是`void`)
+**泛型參數** `Args` 代表函數參數泛型類型，`F` 是 `(...Array<Args>) => mixed` 函式類型
+**函式簽名** 接受一個類型 `F` 的 `callback`，回傳一個相同類型 `F` 的函式
+**`mixed` 類型** Flow 類型系統中所有類型的超類型(supertype)，相當於 TypeScript 的 `unknown`類型。允許函式返回任何類型的值，提供靈活性(而不是`void`)
 
 ---
 
@@ -97,15 +97,15 @@ Effects 中的邏輯，會"**自動**"執行或重新執行以進行同步化。
 
 # 為什麼要使用 useEffectEvent (Why)
 
-1. 針對`useCallback`在特定使用場景下的應用問題(過於經常更新，導致穩定性問題)[issue#14099](https://github.com/facebook/react/issues/14099) 
-2. 有目的地，針對目前`React Complier`的搭配上的最佳化(未來能穩定採用後)
-3. `eslint-plugin-react-hooks`在新版本中的`set-state-in-effect` [issues/34743](https://github.com/facebook/react/issues/34743)的解決樣式之一
+1. 針對`useCallback`在特定使用場景下的應用問題(過於經常更新，導致穩定性問題) [issue#14099](https://github.com/facebook/react/issues/14099) 
+2. 有目的性地搭配最新的`React Complier`最佳化方式
+3. 新版本中的`eslint-plugin-react-hooks`裡的`set-state-in-effect`檢查規則的解決方案之一 [issues/34743](https://github.com/facebook/react/issues/34743)
 
 ---
 
 # 什麼時候和場景使用 useEffectEvent (When/Where)
 
-> 「應該像事件一樣執行，且能存取到最新狀態與屬性」
+> 「某些情況應該像事件一樣執行，且能存取到最新狀態與屬性」
 
 1. 在Effects中混合了「響應式」與「非響應式邏輯」時，需要分離或提取出來的情況
 2. 訂閱外部事件或計時器回呼 (Callbacks)、分析日誌記錄 (Analytics Logging)，回呼函式可能需要最新的 state 或 prop 值時
@@ -135,14 +135,32 @@ function useEvent(handler) {
 
 ---
 
-# 如何使用 useEffectEvent (How)
+# 如何使用 useEffectEvent (How) - 原始範例
+
+```jsx
+function ChatRoom({ roomId, theme }) {
+  useEffect(() => {
+    const connection = createConnection(serverUrl, roomId);
+    connection.on('connected', () => {
+      showNotification('Connected!', theme);
+    });
+    connection.connect();
+    return () => connection.disconnect();
+  }, [roomId, theme]);
+
+  return <h1>Welcome to the {roomId} room!</h1>
+}
+```
+
+---
+
+# 如何使用 useEffectEvent (How) - 改進範例
 
 ```jsx
 function ChatRoom({ roomId, theme }) {
   const onConnected = useEffectEvent(() => {
     showNotification('Connected!', theme);
   });
-
   useEffect(() => {
     const connection = createConnection(serverUrl, roomId);
     connection.on('connected', () => {
@@ -156,13 +174,6 @@ function ChatRoom({ roomId, theme }) {
 }
 ```
 
----
-
-# 結論
-
-1. 結合"應用ref"、"同步Effect"、"穩定callback"合併為單一個更簡潔的API
-2. 針對新的最佳化作法、並行與伺服器整合的官方解決方案
-3. 獨立於useCallback外的特定場景使用的勾子
 
 
 
