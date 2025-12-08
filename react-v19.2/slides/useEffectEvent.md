@@ -20,7 +20,7 @@ style: |
   }
 header: '<span class="tag is-info is-light is-large"> React 19.2</span>'
 footer: '
-  <span class="tag is-link is-medium">Activity</span>'
+  <span class="tag is-link is-medium">useEffectEvent</span>'
 ---
 
 <!-- _header: '' -->
@@ -89,7 +89,7 @@ Effects 中的邏輯，會"**自動**"執行或重新執行以進行同步化。
 - **Effect Event**：由你從 `Effects`(作用)中觸發
 
 `Effect Event`讓你能夠在 Effect 的響應性(reactivity)中，與不應該具有響應性的程式碼之間「打破鏈結」，將非響應式邏輯從響應式邏輯中分離出，以下為幾個重點：
-1. 它**不是響應式的**，必須從依賴項中省略
+1. 它**不是響應式的**，必須從相依項中省略
 2. 它總是能存取到**最新的props和state**，可避免過期/陳舊閉包問題(穩定的函式引用)
 3. 它**只能**在 Effects 裡呼叫，**切勿**不要傳遞到其它元件或勾子
 
