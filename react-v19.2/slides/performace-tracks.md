@@ -52,7 +52,7 @@ footer: '
 
 ---
 
-# Scheduler(排程) - 4 個子軌跡（Subtracks）
+# Scheduler(排程器) - 4 個子軌跡（Subtracks）
 
 > React 內部用於管理不同優先權任務的概念。每個子軌跡分別代表特定優先權工作
 
