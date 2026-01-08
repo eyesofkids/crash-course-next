@@ -33,7 +33,7 @@ const Card = ({ title, description, imageSrc }) => {
         <Heading size='md'>{title}</Heading>
       </Box>
       <Box spacing='2' px='4'>
-        <Text>{description}</Text>
+        <Text color="gray.500">{description}</Text>
       </Box>
       <Box spacing='2' p='4'>
       <Text>

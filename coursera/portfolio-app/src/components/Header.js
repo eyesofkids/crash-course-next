@@ -8,6 +8,7 @@ import {
   faStackOverflow,
 } from "@fortawesome/free-brands-svg-icons";
 import { Box, HStack, Flex ,Link} from "@chakra-ui/react";
+import useScrollDirection from '../hooks/useScrollDirection';
 
 const socials = [
   {
@@ -33,6 +34,10 @@ const socials = [
 ];
 
 const Header = () => {
+  // Get the scroll direction
+  const scrollDirection = useScrollDirection();
+
+  // Handle the click event
   const handleClick = (anchor) => () => {
     const id = `${anchor}-section`;
     const element = document.getElementById(id);
@@ -47,13 +52,14 @@ const Header = () => {
   return (
     <Box
       position="fixed"
-      top={0}
+      top={scrollDirection === 'down' ? '-66px' : '0'}
       left={0}
       right={0}
-      translateY={0}
+      translateY={scrollDirection === "down" ? 0 : -66}
       transitionProperty="transform"
       transitionDuration=".3s"
       transitionTimingFunction="ease-in-out"
+      transition='top 0.3s ease-in-out' 
       backgroundColor="#18181b"
     >
       <Box color="white" maxWidth="1280px" margin="0 auto">

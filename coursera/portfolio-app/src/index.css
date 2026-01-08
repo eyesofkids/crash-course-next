@@ -15,3 +15,12 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* This adds 80px of space above the element when it is scrolled into view */
+#projects-section {
+  scroll-margin-top: 80px;
+}
+
+#contactme-section {
+  scroll-margin-top: 80px;
+}
